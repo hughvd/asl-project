@@ -1,0 +1,77 @@
+Built cs1090b_ms4_main.ipynb — 81 KB, 45 cells, syntax-clean. Section structure
+  visible in the output above. Quick rundown of what's in each region:
+
+  §1 Setup — %pip install timm captum kagglehub seaborn, full imports, GPU/MPS/CPU
+  autoselect, Colab Drive auto-mount.
+
+  §2 Data — subject-independent split builder (re-creates splits.csv if missing),
+  AslDataset class, three augmentation pipelines (strong =
+  RandAugment+RandomErasing+jitter, mild = MS3 recipe, none), Kaggle external dataset
+  downloader via kagglehub with auto class-name normalization onto our 36-way taxonomy.
+
+  §3 Models — TrainConfig dataclass + build_model() factory for resnet18, resnet50,
+  vit_b16 (vit_base_patch16_224.augreg_in21k_ft_in1k), dinov2
+  (vit_small_patch14_dinov2.lvd142m) — last one supports partial fine-tune (last K
+  blocks).
+
+  §4 Training — single train_one() loop: AMP, linear-warmup → cosine LR, label
+  smoothing, checkpointing, history.csv. Six configs ready to launch (MS3-ref ResNet-18,
+   ResNet-18 @ 224, ResNet-50 strong, ResNet-50 mild ablation, ViT-B/16, DINOv2
+  partial-finetune). run_all_configs() skips runs that already have a checkpoint so you
+  can resume after a Colab disconnect.
+
+  §5 Evaluation — evaluate_run saves predictions_test.csv + probs_test.npy, master
+  metrics table, per-signer breakdown (extends MS3 §11.3 to all models), Kaggle external
+   eval, robustness sweep over brightness × blur × jpeg, five-crop TTA.
+
+  §6 Interpretability (AC209B core):
+  - 6.1 Layer-by-layer probing — hooks every ResBlock / ViT block, trains class-probe +
+  signer-probe, plots disentanglement curves.
+  - 6.2 TCAV — 7 hand-shape concepts (open_hand, fist, three_fingers_up, pinky_extended,
+   …); computes CAVs at the penultimate layer via logistic separation; reports TCAV
+  scores via directional derivatives. Returns a (7 concepts × 8 worst classes) heatmap.
+  - 6.3 Grad-CAM + Integrated Gradients — for the W→4, W→6, T→N, D→1, X→Q hard cases,
+  side-by-side original/CAM/IG.
+  - 6.4 Counterfactual perturbation — targeted PGD with tight ε bound; visualizes
+  minimum-norm Δ that flips W→4 back to W. Tests the §11.3 hypothesis that the relevant
+  signer-probe, plots disentanglement curves.
+  - 6.2 TCAV — 7 hand-shape concepts (open_hand, fist, three_fingers_up, pinky_extended,
+   …); computes CAVs at the penultimate layer via logistic separation; reports TCAV
+  scores via directional derivatives. Returns a (7 concepts × 8 worst classes) heatmap.
+  - 6.3 Grad-CAM + Integrated Gradients — for the W→4, W→6, T→N, D→1, X→Q hard cases,
+  side-by-side original/CAM/IG.
+  - 6.4 Counterfactual perturbation — targeted PGD with tight ε bound; visualizes
+  minimum-norm Δ that flips W→4 back to W. Tests the §11.3 hypothesis that the relevant
+  signal is concentrated on the pinky region.
+  - 6.5 ViT attention-head specialization — monkey-patches each block's attention to
+  record weights, computes per-(layer, head) CLS→FG attention ratio, plots heatmap.
+
+  §7 Summary + §8 References + AI-disclosure — references for every method (TCAV: Kim et
+   al. 2018, Grad-CAM: Selvaraju et al. 2017, IG: Sundararajan et al. 2017, Linear
+  probing: Belinkov & Glass 2019, PGD: Madry et al. 2018), AI-assistance citation as
+  required by the rubric.
+
+  ---
+  How to run on Colab
+
+  1. Upload this notebook + your data/ folder to a Colab session (or to a Drive folder
+  named asl_project).
+  2. Runtime → Change runtime type → GPU (L4 or A100 if available).
+  3. Run §1 cells. Verify DEVICE=cuda.
+  4. Run §2 (small). The Kaggle download cell is gated behind # external_df =
+  load_external() — uncomment to download.
+  5. Section §4.2 has run_all_configs() commented-out; uncomment to launch the full
+  training sweep. Total wall-clock estimate on a single L4 GPU: ~6h for all six configs
+  (MS3-ref ResNet-18 ~5min, ResNet-18@224 ~25min, ResNet-50 strong ~80min, ResNet-50
+  mild ~80min, ViT-B/16 ~90min, DINOv2 ~60min). On A100 cut roughly in half.
+  6. After training, all §5 and §6 cells consume the saved runs/<name>/ artifacts and
+  run quickly (probing + TCAV are CPU-OK; counterfactual + saliency are tiny per-image
+  GPU calls).
+
+  The notebook is resumable: every run skips if ckpt_best.pt exists; if Colab
+  disconnects mid-training, just rerun §4.2 — only the unfinished config gets retried.
+
+  ---
+  If you want, I can also draft the MS4 report skeleton (NeurIPS template,
+  section-by-section with placeholder text + figure slots tied to specific notebook
+  cells), so by the time training finishes you only need to drop in numbers and prose.
